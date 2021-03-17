@@ -10,6 +10,7 @@ namespace ash{
             EventLoop();
             ~EventLoop();
             void loop();
+            ///检查当前线程是否是对象创建时的线程
             void assertInLoopThread();
             ///查看当前线程是否是loop被创建的线程
             bool isInLoopThread() const;
