@@ -1,33 +1,40 @@
 #include <iostream>
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/timerfd.h>
+
 #include <network/EventLoop.h>
+#include <network/Channel.h>
 #include <muduo/CurrentThread.h>
 #include <muduo/Thread.h>
-#include <unistd.h>
+
 
 using namespace std;
 using namespace ash;
 
 network::EventLoop* g_loop;
-void threadFunc(){
-    // printf("threadFunc(): pid = %d,tid = %d\n",getpid(),muduo::CurrentThread::tid());
-    // ash::network::EventLoop loop;
-    // loop.loop();
-    g_loop->loop();
+void timeout(){
+    printf("Timeout!\n");
+    g_loop->quit();
 }
 
 int main(){
-    // printf("main(): pid = %d,tid = %d\n",getpid(),muduo::CurrentThread::tid());
-    // ash::network::EventLoop loop;
-    // muduo::Thread thread(threadFunc);
-    // thread.start();
-
-
-    // loop.loop();
-    // pthread_exit(NULL);
     network::EventLoop loop;
     g_loop = &loop;
-    muduo::Thread t(threadFunc);
-    t.start();
-    t.join();
+
+    int timerfd = ::timerfd_create(CLOCK_MONOTONIC,TFD_NONBLOCK | TFD_CLOEXEC);
+    network::Channel channel(&loop,timerfd);
+    channel.setReadCallback(timeout);
+    channel.enableReading();
+
+    struct itimerspec howlong;
+    bzero(&howlong,sizeof(howlong));
+    howlong.it_value.tv_sec = 5;
+    ::timerfd_settime(timerfd,0,&howlong,NULL);
+
+    loop.loop();
+
+    ::close(timerfd);
+    
+
 }

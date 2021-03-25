@@ -1,14 +1,21 @@
 #include "network/EventLoop.h"
+#include "network/Poller.h"
+#include "network/Channel.h"
 #include "muduo/Logging.h"
+
 
 using namespace ash;
 using namespace ash::network;
+
+const int kPollTimeMs = 10000;
+
 ///__thread关键字声明的变量必须为全局变量或函数内的静态变量，且每一个线程有一份独立实体，各个线程的值互不干扰
 __thread EventLoop* t_loopInThisThread = 0;
 
 EventLoop::EventLoop():
 looping_(false),
-threadId_(muduo::CurrentThread::tid())
+threadId_(muduo::CurrentThread::tid()),
+poller_(new Poller(this))
 {
     LOG_TRACE << "EventLoop created " << this << " in thread " << threadId_;
     if(t_loopInThisThread){
@@ -25,15 +32,6 @@ EventLoop::~EventLoop(){
     t_loopInThisThread = NULL;
 }
 
-inline void EventLoop::assertInLoopThread(){
-    if(!isInLoopThread())
-        abortNotInLoopThread();
-}
-
-inline bool EventLoop::isInLoopThread() const{
-    return threadId_ == muduo::CurrentThread::tid();
-}
-
 EventLoop* EventLoop::getEventLoopOfCurrentThread(){
     return t_loopInThisThread;
 }
@@ -48,10 +46,27 @@ void EventLoop::loop(){
     assert(!looping_);
     assertInLoopThread();
     looping_ = true;
+    quit_ = false;
 
-    //::poll(NULL,0,5*1000);
-    sleep(5);
+    while(!quit_){
+        activeChannels_.clear();
+        //调用Poller::poll()函数获取当前活动事件的channel列表，然后依次调用每个channel的handleEvent()函数
+        pollReturnTime_ = poller_->poll(kPollTimeMs,&activeChannels_);
+        for(ChannelList::iterator it = activeChannels_.begin(); it != activeChannels_.end(); it++){
+            (*it)->handleEvent(pollReturnTime_);
+        }
+    }
 
     LOG_TRACE << "EventLoop " << this << " stop looping";
     looping_ = false;
+}
+
+void EventLoop::updateChannel(Channel* channel){
+    assert(channel->ownerLoop() == this);
+    assertInLoopThread();
+    poller_->updateChannel(channel);
+}
+
+void EventLoop::quit(){
+    quit_ = true;
 }
