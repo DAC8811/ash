@@ -30,6 +30,8 @@ namespace ash{
             ///维护和更新pollfd_数组，其调用顺序为：
             ///用户在EventLoop中对channel进行设置->channel使用update->loop使用updateChannel->poller使用updateChannel
             void updateChannel(Channel* channel);
+            ///loop使用removeChannel->poller使用removeChannel
+            void removeChannel(Channel* channel);
 
             void assertInLoopThread(){
                 ownerLoop_->assertInLoopThread();

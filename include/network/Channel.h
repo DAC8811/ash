@@ -52,6 +52,7 @@ namespace ash{
             void set_index(int idx) { index_ = idx; }
 
             EventLoop* ownerLoop() { return loop_; }
+            void remove();
         private:
             ///update的这个操作只有在修改了关心事件后才会调用，本质上就是通知自己的主loop对自己使用updateChannel函数
             void update();
@@ -61,7 +62,7 @@ namespace ash{
             static const int kWriteEvent;
 
             EventLoop* loop_;
-            //poll中每一个连接通道对应的文件描述符
+            //poll中每一个连接通道对应的文件描述符,该fd在channel构造时被设置，之后就无法改变了
             const int  fd_;
             ///该channel所关心的具体的IO事件，由创建者设置
             int        events_;
@@ -69,6 +70,8 @@ namespace ash{
             int        revents_;
             /// used by Poller.本质上就是channel中包含的文件描述符fd在poller存储的fd数组中的下标位置
             int        index_; 
+
+            bool addedToLoop_;
 
             EventCallback writeCallback_;
             EventCallback readCallback_;

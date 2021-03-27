@@ -25,6 +25,7 @@ Channel::~Channel()
 }
 
 void Channel::update(){
+    addedToLoop_ = true;
     loop_->updateChannel(this);
 }
 
@@ -48,4 +49,11 @@ void Channel::handleEvent(muduo::Timestamp receiveTime){
             writeCallback_();
     }
 
+}
+
+void Channel::remove()
+{
+  assert(isNoneEvent());
+  addedToLoop_ = false;
+  loop_->removeChannel(this);
 }

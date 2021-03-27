@@ -1,7 +1,12 @@
+#include <algorithm>
+
 #include "network/EventLoop.h"
 #include "network/Poller.h"
 #include "network/Channel.h"
+#include "network/TimerId.h"
+#include "network/TimerQueue.h"
 #include "muduo/Logging.h"
+
 
 
 using namespace ash;
@@ -15,7 +20,8 @@ __thread EventLoop* t_loopInThisThread = 0;
 EventLoop::EventLoop():
 looping_(false),
 threadId_(muduo::CurrentThread::tid()),
-poller_(new Poller(this))
+poller_(new Poller(this)),
+timerQueue_(new TimerQueue(this))
 {
     LOG_TRACE << "EventLoop created " << this << " in thread " << threadId_;
     if(t_loopInThisThread){
@@ -69,4 +75,58 @@ void EventLoop::updateChannel(Channel* channel){
 
 void EventLoop::quit(){
     quit_ = true;
+}
+
+void EventLoop::queueInLoop(const Functor& cb){
+    {
+        muduo::MutexLockGuard lock(mutex_);
+        pendingFunctors_.push_back(cb);
+    }
+
+    if(!isInLoopThread() || callingPendingFunctors_){
+        wakeup();
+    }
+}
+
+void EventLoop::runInLoop(const Functor& cb){
+    if(isInLoopThread()){
+        cb();
+    }
+    else{
+        queueInLoop(cb);
+    }
+}
+
+TimerId EventLoop::runAt(const muduo::Timestamp& time,const TimerCallback& cb){
+    return timerQueue_->addTimer(cb,time,0.0);
+}
+TimerId EventLoop::runAfter(double delay,const TimerCallback& cb){
+    muduo::Timestamp time(addTime(muduo::Timestamp::now(),delay));
+    return runAt(time,cb);
+}
+TimerId EventLoop::runEvery(double interval,const TimerCallback& cb){
+    muduo::Timestamp time(addTime(muduo::Timestamp::now(),interval));
+    return timerQueue_->addTimer(cb,time,interval);
+}
+
+void EventLoop::wakeup()
+{
+  uint64_t one = 1;
+//  ssize_t n = sockets::write(wakeupFd_, &one, sizeof one);
+//   if (n != sizeof one)
+//   {
+//     LOG_ERROR << "EventLoop::wakeup() writes " << n << " bytes instead of 8";
+//   }
+}
+
+void EventLoop::removeChannel(Channel* channel)
+{
+  assert(channel->ownerLoop() == this);
+  assertInLoopThread();
+  if (eventHandling_)
+  {
+    assert(currentActiveChannel_ == channel ||
+        std::find(activeChannels_.begin(), activeChannels_.end(), channel) == activeChannels_.end());
+  }
+  poller_->removeChannel(channel);
 }
